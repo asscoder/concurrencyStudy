@@ -1,0 +1,342 @@
+------------------------------------------------------------------------------------------------------------------------
+		CONCURRENCY IN PRACTICE
+------------------------------------------------------------------------------------------------------------------------
+
+
+Chapter 1 - Introduction
+-------------------------------------------------------
+
+Race conditions: When the outcome of an operation depends on the exact timing of two competing processes/threads. [Something bad happens]
+Liveness conditions: When the program is blocked in one way or another [something good never happens]
+Performance: Make sure that the 'good' happens fast. E.g. too much context switching may impede performance (CPU, non localized variables, etc)
+
+If a state may be accessed concurrently, ALL PATHS that lead to that state must be thread safe.
+
+
+Implicit examples were thread safety is important:
+  - Timer
+  - Servlets/JSP
+  - RMI
+  - Swing/AWT: Also typical swinch components are not thread safe and must always be accessed only by the event thread.
+
+
+Chapter 2 - Thread safety
+-------------------------------------------------------
+
+
+Thread safe code, correctly manages the SHARED, MUTABLE STATE. 
+Shared: By multiple threads
+Mutable: can change during the life time of the object/class/application 
+
+
+If multiple threads access the same date, and one of them might modify it then ALL threads must coordinate their access to it.
+
+
+Java methods for coordination:
+- syncrhonized
+- atomic variables
+- volatile variables
+- explicit locks
+
+Altenratively:
+ - Don't share state between threads
+ - Make the variable immutable
+
+
+Thread safe class: Encapsulate any synchronization need so that clients need not provide their own.
+                   No sequence of operation (parallel or not) can cause an invalid state (invariants/post conditions)
+                   
+
+Thread safe class. HOW TO:
+i) Stateless (only method variables)
+ii) Each mutuable state variable must be accessed for BOTH READ AND WRITE operations, using the SAME lock.
+    For every invariant that includes > 1 variables, ALL the variables mst be guarded by the same lock.
+iii) Atomicity: Ensure that operations that should be atomic are atomic
+    - Use of buildin atomic classes
+    - When multiple state variables, just the above is not sufficient to ensure atomicity. State variable must be updated in a single atomic operations (e.g .synchronized) 
+
+
+
+Liveness
+i) Don't hold locks unecessarily. Lock only portions that are needed (do not overdo it though, as locking/unlocking has also a performance pentaly)
+
+
+Chapter 3 - Sharing objects
+------------------------------------------------------------------------------------
+
+Non synchronized blocks, when access shared state may result to:
+- reordering: compiler only has to make sure order is preserved within the context of a thread. From another thread it might appear as
+if operations are performed out of sequence (e.g. due to optimisations) -- WASN'T ABLE TO REPRODUCE THAT -
+- stale data: some (non volatile) variables values may never become accessible
+
+
+JVM: set/get operations are supposed to be attomic, apart from longs  and doubles. So in addition to stale data, we might actually
+get completelly incorrect data as well. (if declared volatile there is no issue though)
+
+Synchronization guarantee: If one thread acquires a lock it will have access to the state exactly before the prior thread acquired the SAME lock.
+Thus:
+	- All shared vairables must be synchronized
+        - A COMMON lock must be used for synchronization (i.e. within the encapsulation of a class. If multiple locks are used for separate variables,
+        inconcistent states may be visible to other threads)
+
+
+Volatile: When a thread accesses a volatile variable it is guaranteed to access the last state of all variables visible by the last thread that accessed the thread.
+It therefore is much more powerful than simply ensuring visibility of a variable. 
+
+Volatile uses:
+      - Not when atomicity is necessary (it doesn't provide that)
+      - Not when it becomes non intutive to explain why it's safe (it might work but it's difficult to maintain)
+      - Use when all following ar emet:
+        - writes to a variable do not depend on its currenct state or only a single thread writes to it
+        - a variable does not participate in invariants with other variables
+        - locking is not required for other reasons (e.g. atomicity)
+
+Escaping objects: Encapsulation allows controlling access to shared objects. We should avoid escaping objects (published objects when they should not be published due
+    to either trhad safety or state - e.g. publishing a yet unitialized object)
+    - Public static / non static variables
+    - Returning an internal object 
+    - Returning an internal object that provies access to other object
+    - Passing to a non final / private method
+
+Escaping object in inconsistent state:
+    - Any form of passing a reference to this within a constructor - class is not not properly constructed until the constructor ends
+     (this mainly applies to code that might allow access to a different thread)
+      - explicitly
+      -  passing an innter class to something:  
+      - creating a thread in the constructor: 
+      - calling a non final or private method of the same class
+ 
+   - Typically can be solved by factory methods, where onbject is constructed and then it's passed to something else (event listener, thread, etc)
+
+- One solution: Don't share across thread
+  - ad-hoc confinement: when programmer is responsible for using only one thread to access them (e.g. swing)
+    - spcial case: use just one thread for writing volatile objects (to ensure "atomicity" in the write operations)
+
+  - Stack local objects: only accessible by single thread, but make sure you don't let them escape
+
+  - ThreadLocal: One object per thread. Again make sure u don't let them escape. Not really usefull if system wide state is necessary. But can be very useful for
+  e.g. Connections etc. Each object is garbage collected when referencing thread dies.
+
+- Other solution: Immutable. 
+  - If a state cannot be changed, there is basically no problem
+  - How to:
+    - all fields final (even if there are no setter methods: final fields ONLY ensure that the initialisation state can be consistel accessed between threads)
+    - no escaping references during construction
+    - no methods allow modification of the state (or escaping object)
+
+  - Good practice: delcare everything final unless needed otherwise. It's easier to understand that invariables of a class
+  when final fields are declared as such.
+
+- Publishing mutable objects: Both STATE and REFERENCE must be accessible by the reading thread
+  - Always ok for immutable objects, but for mutable or effectivelt immutable (mutable but used as immutable) the following must hold:
+  - Static variable: always safe
+      - volatile/atomicReference reference
+      - reference into a final field of an object
+      - reference into a field that is guarded by the loack
+      - storing reference in one of java safe containers: hashTable, synchronizedMap, ConcurrentMap, vectory, concurrent lists, queues etc
+
+
+Chapter 4 - Thread safety
+-------------------------------------------------------
+
+Making a thread-safe program where everything is stored in public fields is possible but messy and unmaintanable. 
+
+
+Use proper encapsulation and try to define thread safe objects:
+- Identify the mutable state of the object
+  - includes the state of contained objects
+- Identify the invariants and post conditions
+- Establish a policy for concurrent access to the object
+  - Typically a thread safe class catter fo the safety of accessing the state that it OWNS. E.g. a concurrenthashmap will not provide safe access to the
+  keys/values stored in the map (even if it will so for the retriveal/storeage operations)
+  - when class invariants do no constraint certain states, then we can lax  encaapsulationa / concurrrent constraints for simplicitly  efficiency
+  - compound actions should normally be atomic (e.g. ++i)
+  - invariants for multiple-state variables (e.g. range of integers): operations must be atomic (both concurrent wise, and interface wise - single method e.g.)
+
+General good rules
+  - Private locks are better than intristic object locks, as they are encapsulated. Otehrwise, external code can aqcuire the lock to an obect (correctly/incorrectly)
+  and cause liveliness problems
+
+
+Thread safe technique one - Instance confinement (not letting non thrad safe object escape a  thread safe container)
+  - Basicually use non thread safe object in the very well confined environment of a call. If the object never escapes, we have a thread safe class
+    - object can escape in sneaky wasy such as iterators etc 
+  
+  - Technique 1 (Monitor Pattern): Control all access to the internal object states using a lock
+
+Thread safe technique 2 (Delegation): Use existing thread safe object to implement the behaviour. Relatively strateforward if the state consists of one variable that we can replace with
+  a thread safe implementation. Also good for multipla INDEPDENDENT variables. If they are not indepndent, and not all relevant operation can be dones as atomic by delagation, then we
+  need our own locking.
+
+
+
+When it's ok to allow objects to escape
+- Generally not a good ideas as a SW design principle
+- Still if: thread safe, not part of any invariants for it's value and prohibited state transition for any of it's operations, it can be safely published.
+- Once the published objects are fully threadsafe, and their allowed modification is not agains any of the class invariants
+
+Performance tips:
+  - Attempt to deviee techniques so that less copying etc is necessary (e.g. pre constructed immutable version of our collections / general immutable object etc). It makes has (obviously)
+vase performance effect (e.g. preconstructed UnodiafiableMap for returning made the test > 2 times faster)
+
+
+Documentation
+  - Syncrhonization policy (for fugure extensions etc) and synchronization guarantees (for the users) are important bits of the design and should be clearly documented
+  - Tip to figure out thread safety of undocumented classes: think from their developers point of view, and it usually becomes clear if "it would be absurd not to be thread safe"
+
+
+Chapter 5 - Java building blocks
+-------------------------------------------------------
+
+
+Thread safe techniques 3/4 - For extending functionality of existing thread safe classes
+  - Extension: Extned the class and use the SAME synchronization policty used in the class (e.g. for extending Vector - synchronization is on the object): Synchronization policy is distributed among
+  separatelly maintained classes
+  - Client side locking: Provide helper class, that uses again the synchronization policy of the class. Same drawbacks as above, but can be used when we do not now the actuall class of an object (e.g.
+  Collections,synchronizedMap
+  - Comoposition: wrapper with our own lock. Can have a small performance penalty (double locking) but it's the most robust solution. Synchronization code is contained and manageable.
+
+
+- Object monitor cases: Vector, Hashtable, Collections.synchronizedXXX
+  The monitor is always the object it self
+  Compund operations (e.g. get last element, insert if absent) should be implemented
+  Iteration should be locked. If we don't like that, then a copy may be made (lock must be held during cloning though)
+  Hidden iteration: toString() in collection, hashCode(), equals(), containsALL(), removeALL(), retainAll(), addALL() etc
+
+- ConcurrentHashMap
+  - Abritrary readers, multiple writters, readers/writters at the same time
+  - Iterator does not throw concurrent modification exception, but it's weakly consistent (will iterate over what was there when it was created and MAY include some of the 
+  additional modifiications)
+  - Cannot get exclusive access to map as in synchronized collections.
+  - Internal locking is implemented using multiple locks on segements of the table
+
+- CopyOnWriteArrayList
+  - Maintains thread safety by immutable objects re-created everytime the collection is modified.
+  - Insertion  much slower than retrieval
+  - Iteration does not throw concurrent modification exception. Iterator does not support remove. But, calling remove() on the list while iterating is fine.
+  - Ideal for implementing listernrs
+
+- CopyOnWriteArraySet: as above
+
+
+- BlockingQueues: Multiple implementation that offer nice separation between produceers and consumers
+  - Important note: Use PUT/TAKE for the default behaviour. Other methods offer alternatives, for most commone uses these should do.
+
+  - Try to use bounding, so as to accomodate for the case where producers are consistently faster than consumers (otherwise, we'll get outOfMemory errors)
+    - LinkedBlockingQueue, ArrayBlockingQueue: normal queues
+    - PriorityBlockingQueue: non FIFO
+    - SynchronizedBlockingQueue: direct handover (no queue). Can be usefull when there will always be a consumer. It offers more feedback to the caller as it know 
+    that when "offer" has returned, someone is doing something about it's request.
+    - dequeue: double ended queue. Usefull for the "work stealing" paradigm where each consumer is also a producer. In some cases this can be more efficient as each consumer
+   adds work to it's own queue without contending for other resources. Contention occurs only when there is no more work to be done and a consumer will look in other consumer
+   queues.
+
+- Thread safe technique 4: Serial thread confinement: When objects that are to be processed concurrently are handled by confining 
+each object instance at a single thread each time. In that case only safe publlishing is sufficient. Blocking queue etc, are perfect
+for that as their internal mechanisms ensure proper publishing. 
+
+- Handling interrupted
+  - When catching an interrupted exception you can do 3 things:
+    - Ignore: Only when extending Thread and have top level control over the execution (in this case do nothing means return from the 'run' method. This is perfectly valid 
+    for runnables, but we cannot be sure that a runnable will  be used as the top level of a thrad. So returning might not do it in all cases.
+    - Do not catch the exeption and let the caller handle it (or retrhrow it after some processing)
+    - Handle the exception, but then restore interrupted status by calling Thread.currentThread().interrupt(). This is to ensure that some other code will do something about it.
+        
+- Synchronizers
+
+  Syncrhonizers are objects where their state controls the flow of executions of threads. BlockingQueues, in addition to containers, are also syncrhonizers.
+  Other synchronizers offered are:
+  - Latch: All threads wait until it reachers a terminal state. Once this happens it always remains open. Common uses:
+    - ensuring that an object is initialized before other threads use it (e.g. binary latch)
+    - dependencies: ensure that before an action proceeds all other dependent actions have finished (binary latch for all relevant resources. each one waits on everything it depends)
+    - temporal synchronization: all threads start together, etc
+  - FutureTask: Can be used as a latch as well, as get waits for the task to finish. It is an implementation of Future that allows cancelling and requesting the results of a callable.
+    - A callable can be passed to a Thread (we don't have to use an executor)
+    - States when calling get: finished, not finished, exception
+    - All exceptions as wrapped to a ExecutionException, which short of makes it a mess (but what to do!)
+    - FutureTaks can be used outside a thread also: just call run() and then get()
+  - Semaphore: Initialized with a count and can be aqcuired() or released(). Aquisution and release can happen through different threads. Very usufull
+    for controling (bounded) shared access to resources. Can also be used to implement bounded pools and queues. (bounded pools are easier implemented using
+    a blocking queue)
+  - Barriers, usefull for synchronizing tasks, some way as latch, but this is re-usable. 
+    - CyclicBarrier: When all threads have called await() then they are released and the object is reset. Returns a unque/thread arrival index as well so that threads
+    can use that to elect a part for extra processing. Also can be passed a runnable that is executed once all threads are finished but before continuing
+    - Exchanger: Allows two threads to exchange (safely published information). Can be viewed as a bidirectional synchronous queue
+
+
+Chapter 6 - Task exeqution
+-------------------------------------------------------
+
+An important part of designing a concurrent application is defining it's taks boundaries.
+
+Ideally we want taks that take up a small percentage of the CPU, so that we have significant parallelism.
+
+
+The tasks boundaries and an execution policy should offer:
+  - Good throughput: utilize resources 
+  - Good responsiveness: reply/handler requests as fast as possible
+  - Grecefull degaradation: should remain responsive when overloaded
+
+
+Boundaries:
+  - For most server application the user-request boundary makes sense.
+
+
+Decoupling exection and submission of a taks
+  - Offered by the executor interface
+  - It's far easier to change the executor implementation (declared at a single place) than to change the way tasks are submitted
+  - An executor incorporates the execution policy
+    - in what thread the tasks are executed
+    - in what order and when are the tasks going to be executed
+    - How many tasks can be executed concurrently
+    - How many tasks can be queued waiting for executioin
+    - If a tasks should be rejected due to overload, which one should it be and how should the system be notified
+    - What should be done before/after executing a task
+
+Execution Policies:
+  - Sequentiall processing: Generally bad throughput (bad resource utilisaton) and bad responsiveness. May be ok when we have single client submiting one request at a time
+  - Thread per request: Good throughput/responsivness but not perfect due to thread lifecycle overhead, signficant resource consumption. Will crass badly if overloaded (OS thread
+  limitations / memory limitions)
+
+Sign of concern
+  - Code such as new Thread(runnable).start() in places where some more flexible execution policy may be
+required, consider changing that to an executor
+
+
+Static factory executors
+  - FixedThreadPool: increases threads up to the number specified, and then tried to maintain it (if threads die, new ones are created)
+  - CachedTreadPool: decreases threads if no longer used, but places no upper bound
+  - SingleThreadExecutor: Executes everything sequentially, according to the ordering of the queue. Does proper syncrhonisaton to ensure 
+ that modifications of one invocation are available to the next (even if the thread dies and is re-created in the meantime)
+  - ScheduledThreadPool: Delayed and periodic taks execution
+
+Executor LifeCycle
+  - ExecutorService extends executor to allow for lifecycle methods (shutdown etc)
+    - shutdown: does not allow further submissions, but will allow anything submited (even if not already started) to finish
+    - shutdownNow: will cancel all pending tasks and will(?) try to terminate currenctly executing tasks
+
+Scheduled tasks
+  - Timer is crap: as it is based on as single thread, that is not re-created if it dies
+  - A scheduledExecutor is 1000 times better
+    - can schedule one off tasks, or periodic tasks (fixed delay, or fixed interval)
+
+Callable for controlling exectuion getting results etc
+  - Runnables only allow a simple lifecycle
+  - If we need results, exception handling, lifecycle of the tasks etc, a callable can be used
+  - Submiting a runnable/callable is a safe publication of them. Returning a result or an exception is a safe publication of the result
+
+LifeCycle of a taks
+  - Abstracted away by the Future interface
+  - FutureTask can be used as a FutureImplementation for both runnables and callables
+  - Future is returned on submission to executor services.
+
+
+- TODO
+  - Implement the Future Rendere
+
+-----------------------General principles--------------------------
+
+
+
+Parallelising only heterogeneous tasks is limited: It's sometimes the easy way to separate things
+but it is limited. The real performance benefits occur when we parallelise homegenous tasks. So that we can have n workes sharing x/n workload. Otherwise, it's only usefull to have as many workes as taks and if one of them is significantly more time consuming than the rest, we've just increased program complexity without significant performance gains.
