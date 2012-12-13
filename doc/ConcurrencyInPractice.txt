@@ -328,11 +328,27 @@ Callable for controlling exectuion getting results etc
 LifeCycle of a taks
   - Abstracted away by the Future interface
   - FutureTask can be used as a FutureImplementation for both runnables and callables
+    - Note: it has a very usefull protected 'done' method that is called once the execution of the task is finished.
   - Future is returned on submission to executor services.
 
 
+Getting the results of multiple tasks
+  - What I was using (shutdown etc) has two drwbacks: shutsdown the executor and also we only get the results at the end
+  - CompletionService is a better interface that combines a blocking queue and an executor. 
+    - it allows retrieving results as they become available
+    - can re-use executors, and the grouping of tasks is not tied to the executor in any way
+  - If we have a time badget, we can use an invokeALL
+
+
+
+
 - TODO
-  - Implement the Future Rendere
+  - Implement future renderer using the CompletionService
+    - test whether if there is an error in the processing of an element, whether the whole thing will ever exit (as it has a 'for' for the number of submited tasks)
+    - add default stuff if the it timesout
+      - using invokeAll: by the end tatsks will have either completed or cancelled
+  
+    - Can we have something similar to invoke all but with incremental loading (e.g. load results as they come but ignore the ones after some time budget)
 
 -----------------------General principles--------------------------
 
@@ -340,3 +356,7 @@ LifeCycle of a taks
 
 Parallelising only heterogeneous tasks is limited: It's sometimes the easy way to separate things
 but it is limited. The real performance benefits occur when we parallelise homegenous tasks. So that we can have n workes sharing x/n workload. Otherwise, it's only usefull to have as many workes as taks and if one of them is significantly more time consuming than the rest, we've just increased program complexity without significant performance gains.
+
+
+Responsiveness: Learn to timeout tasks if their result is irrelevant after a while. E.g. cancle a parallel process that fetches adds and use a default add instead if out time badget has been exceeded. This
+ensures that the application will be responsive independently of the external factors.
