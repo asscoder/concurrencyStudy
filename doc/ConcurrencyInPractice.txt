@@ -1,4 +1,4 @@
- ------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 		CONCURRENCY IN PRACTICE
 ------------------------------------------------------------------------------------------------------------------------
 
@@ -304,6 +304,7 @@ required, consider changing that to an executor
 
 
 Static factory executors
+  - NOTE: as for all thread pools, also in these: If executor is not shuted down, application will never end.
   - FixedThreadPool: increases threads up to the number specified, and then tried to maintain it (if threads die, new ones are created)
   - CachedTreadPool: decreases threads if no longer used, but places no upper bound
   - SingleThreadExecutor: Executes everything sequentially, according to the ordering of the queue. Does proper syncrhonisaton to ensure 
@@ -336,19 +337,10 @@ Getting the results of multiple tasks
   - What I was using (shutdown etc) has two drwbacks: shutsdown the executor and also we only get the results at the end
   - CompletionService is a better interface that combines a blocking queue and an executor. 
     - it allows retrieving results as they become available
-    - can re-use executors, and the grouping of tasks is not tied to the executor in any way
-  - If we have a time badget, we can use an invokeALL
+    - can have multiple CompletionServices per executor so the grouping of tasks is not tied to the executor in any way
+  - If we have a time badget, we can use an invokeALL. But this is a synchronous call (so to make it properly paralle, it should also happen in a separate thread)
 
 
-
-
-- TODO
-  - Implement future renderer using the CompletionService
-    - test whether if there is an error in the processing of an element, whether the whole thing will ever exit (as it has a 'for' for the number of submited tasks)
-    - add default stuff if the it timesout
-      - using invokeAll: by the end tatsks will have either completed or cancelled
-  
-    - Can we have something similar to invoke all but with incremental loading (e.g. load results as they come but ignore the ones after some time budget)
 
 -----------------------General principles--------------------------
 
