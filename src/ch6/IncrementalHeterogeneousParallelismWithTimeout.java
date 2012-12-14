@@ -61,9 +61,9 @@ public class IncrementalHeterogeneousParallelismWithTimeout {
 			System.out.println("Interrupted!!!!");
 			Thread.currentThread().interrupt();
 			return;
+		} finally {
+			pool.shutdown(); //Important: Ohterwise, in case of interrupted exception the pool will never be stopped
 		}
-		
-		pool.shutdown();
 	}
 	
 	

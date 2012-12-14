@@ -341,6 +341,31 @@ Getting the results of multiple tasks
   - If we have a time badget, we can use an invokeALL. But this is a synchronous call (so to make it properly paralle, it should also happen in a separate thread)
 
 
+Chapter 6 - Cancelation and shutdown
+-------------------------------------------------------
+
+
+Controlling the lifecycle of a thread: A co-operative task. 
+    There were in the past methods to pre-emptively stop/suspend/restart a task
+    but were proven to be inherently unsafe (leaving objects in inconsistent state / deadlocks etc). Thus, the common practice now is to use flag
+    variables where a caller can request a task to do something and (hopefull) soon after the thread does it.
+
+    As a co-operative task, a task should clearly document the how/when/what can be cancelled/suspended etc. E.g.
+    - how to cancel a tasks
+    - when the thread checks whether it has been cacelled
+    - what action it takes in response to that
+
+
+
+-- TODO;
+   - make a cancellable tasks
+     - Nice design thingies
+       - flag should be volatile
+       - thread cancel should be called in a finally block of the caller to avoid not stopping it in case of interrupted exceptiojn
+       - keep in mind that shared stuff should be synchronized both on put/get..
+
+
+
 
 -----------------------General principles--------------------------
 
